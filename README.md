@@ -9,11 +9,11 @@ You will also need any of their dependencies.
 # System
 My system is running
 
-Ubuntu 20.04 LTS (Through WSL2)
+**Ubuntu 20.04 LTS** (Through WSL2)
 
-Python 3.7.11 (I believe you need python 3.6=< version <3.8 to get spinning up to work.
+**Python 3.7.11** (I believe you need python 3.6=< version <3.8 to get spinning up to work.
 
-Pytorch version 1.3.1
+**Pytorch version 1.3.1**
 
 The version requirements for some of the packages don't play nicely if not correct, so make sure you closely follow dependencies.
 # Description
