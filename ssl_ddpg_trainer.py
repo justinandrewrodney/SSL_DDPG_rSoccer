@@ -156,11 +156,10 @@ def train(env_fn, env_name, actor_init=Actor, critic_init=Critic,ac_kwargs=dict(
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.shape[0]
 
-    #print(**ac_kwargs)
-    # Action limit for clamping: critically, assumes all dimensions share the same bound!
+    # keep? output of actor is [-1 - 1], scaling to action should be done on env side? act_limit is 1.0 in these envs anyways...
     act_limit = env.action_space.high[0]
     #print(act_limit)
-    environment_info = "env_name,"+env_name+",obs_dim,"+str(obs_dim[0])+",act_dim,"+str(act_dim)+\
+    environment_info = "env_name,"+env_name+""+str(env.time_step)",obs_dim,"+str(obs_dim[0])+",act_dim,"+str(act_dim)+\
                                                 ",act_limit,"+str(act_limit)+",act_limit,"+str(act_limit)+",\n" 
     data_info = "EpochNum,EpisodeNum,Total_rewards,Total_steps,Done,\n"
     write_to_csv(pytorch_save_path+"/testperformance.csv", environment_info+data_info)
