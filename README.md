@@ -17,8 +17,8 @@ Pytorch version 1.3.1
 
 The version requirements for some of the packages don't play nicely if not correct, so make sure you closely follow dependencies.
 # Description
-This project provides a python program for training robot skills for Small Sized League(SSL) in the rSoccer environment utilizing the Deep Deterministic Policy Gradient algorithm, building upon and modifying the spinningup DDPG example. 
-The trained models are saved as Torch Scripts so that they may be utilized in different systems. 
+This project provides a python program for training robot skills for **Small Sized League(SSL)** in the **rSoccer** environment utilizing the **Deep Deterministic Policy Gradient** algorithm, building upon and modifying the **spinningup** DDPG example. 
+The trained models are saved as **Torch Scripts** so that they may be utilized in different systems written in different languages. 
 This also provides a modified SSLGoToBall environment that is modified for actions and states that are using the robots orientation as the starting frame, as well as different reward functions.
 
-I hope that this provides a good example for anyone seeking to utilize Reinforcement Learning in their own SSL system, and provides an example to build upon in their own system, or a reference point for training in rSoccer and exporting the Torch Script Model.
+I hope that this provides a good example for anyone seeking to utilize Reinforcement Learning in their own SSL system and provides an example to build upon in their own system or serves as reference point for training in rSoccer and exporting the Torch Script Model.
