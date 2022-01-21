@@ -21,4 +21,4 @@ This project provides a python program for training robot skills for **Small Siz
 The trained models are saved as **Torch Scripts** so that they may be utilized in different systems written in different languages. 
 This also provides a modified SSLGoToBall environment that is modified for actions and states that are using the robots orientation as the starting frame, as well as different reward functions.
 
-I hope that this provides a good example for anyone seeking to utilize Reinforcement Learning in their own SSL system and provides an example to build upon in their own system or serves as reference point for training in rSoccer and exporting the Torch Script Model.
+I hope that this provides a good example for anyone seeking to utilize Reinforcement Learning in their own SSL system and provides an example to build upon in their own system or serves as reference point for training in rSoccer and exporting the Torch Script Model. There is definitely room for improvement, but I am mainly using this as a tool to export models into my own system, so I may not have time to clean up all of the code, but I still hope it can be usefull.
