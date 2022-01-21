@@ -44,7 +44,7 @@ def test(env_fn, actor_model_path, max_ep_len=1000, num_test_episodes = 10, logg
 
 def write_to_csv(file_name, str_to_write):
         f = open(file_name, "a")
-        f.write(file_name)
+        f.write(str_to_write+'\n')
         f.close()
 
 def train(env_fn, env_name, actor_init=Actor, critic_init=Critic,ac_kwargs=dict(), seed=0, 
@@ -79,15 +79,16 @@ def train(env_fn, env_name, actor_init=Actor, critic_init=Critic,ac_kwargs=dict(
         return  pytorch_save_path
     """
     Deep Deterministic Policy Gradient (DDPG)
-
+    This is modified from: https://spinningup.openai.com/en/latest/_modules/spinup/algos/pytorch/ddpg/ddpg.html
+    to work with rSoccer environments.
 
     Args:
         env_fn : A function which creates a copy of the environment.
             The environment must satisfy the OpenAI Gym API.
 
-        actor: constructor for actor model
+        actor: constructor for actor model. Takes in an observation, returns an actions ranged [-1,1]
 
-        critic: constructor for critic model
+        critic: constructor for critic model. Takes in an observation and actions.
 
         seed (int): Seed for random number generators.
 
@@ -159,7 +160,7 @@ def train(env_fn, env_name, actor_init=Actor, critic_init=Critic,ac_kwargs=dict(
     # keep? output of actor is [-1 - 1], scaling to action should be done on env side? act_limit is 1.0 in these envs anyways...
     act_limit = env.action_space.high[0]
     #print(act_limit)
-    environment_info = "env_name,"+env_name+""+str(env.time_step)",obs_dim,"+str(obs_dim[0])+",act_dim,"+str(act_dim)+\
+    environment_info = "env_name,"+env_name+",time_step,"+str(env.time_step)+",obs_dim,"+str(obs_dim[0])+",act_dim,"+str(act_dim)+\
                                                 ",act_limit,"+str(act_limit)+",act_limit,"+str(act_limit)+",\n" 
     data_info = "EpochNum,EpisodeNum,Total_rewards,Total_steps,Done,\n"
     write_to_csv(pytorch_save_path+"/testperformance.csv", environment_info+data_info)
@@ -298,7 +299,6 @@ def train(env_fn, env_name, actor_init=Actor, critic_init=Critic,ac_kwargs=dict(
                 ep_len += 1
             logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
             write_to_csv(pytorch_save_path+"/testperformance.csv",str(epoch)+','+str(j)+','+str(ep_ret)+','+str(ep_len)+','+str(d)+','+'\n')
-            test_ep_number+=1
 
     
     def savePtFiles():
@@ -427,7 +427,6 @@ if __name__ == '__main__':
     elif(args.mod==True):
         print("Using actor-critic-mod")
         actor_init=ActorMod; critic_init=CriticMod;
-
     else: 
         print("Using new actor-critic")
         actor_init=Actor; critic_init=Critic;
