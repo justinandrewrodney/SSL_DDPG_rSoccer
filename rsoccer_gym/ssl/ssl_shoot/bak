@@ -1,0 +1,437 @@
+import math
+import random
+from typing import Dict
+
+import gym
+import numpy as np
+from rsoccer_gym.Entities import Frame, Robot, Ball
+from rsoccer_gym.ssl.ssl_gym_base import SSLBaseEnv
+
+"""
+Uses similar state-action-rewards as this paper
+https://zhuyifengzju.github.io/files/2018Robocup.pdf
+"""
+class SSLShootEnv(SSLBaseEnv):
+    """The SSL robot needs to make a goal
+
+
+        Description:
+            One blue robot and a ball are placed on fixed position on a half 
+            div B field, the robot is rewarded if it makes a goal
+        Observation:
+            Type: Box(4 + 7*n_robots_blue + 5*n_robots_yellow)
+            Normalized Bounds to [-1.2, 1.2]
+            Num      Observation normalized  
+            0->3     Ball [X, Y, V_x, V_y]
+            4->10    id 0 Blue [X, Y, sin(theta), cos(theta), v_x, v_y, v_theta]
+            +5*i     id i Yellow Robot [X, Y, v_x, v_y, v_theta]
+        Actions:
+            Type: Box(5, )
+            Num     Action
+            0       id 0 Blue Global X Direction Speed  (%)
+            1       id 0 Blue Global Y Direction Speed  (%)
+            2       id 0 Blue Angular Speed  (%)
+            3       id 0 Blue Kick x Speed  (%)
+            4       id 0 Blue Dribbler  (%) (true if % is positive)
+            
+        Reward:
+            1 if goal
+        Starting State:
+            Robot and ball on half opponent field size in different y.
+        Episode Termination:
+            Goal, ball leaves bounds or 60 seconds (2400 steps)
+    """
+
+    def __init__(self, field_type=1, random_init=False, enter_goal_area=False):
+        super().__init__(field_type=field_type, n_robots_blue=1, 
+                         n_robots_yellow=0, time_step=0.03)
+        self.random_init = random_init
+        self.enter_goal_area= enter_goal_area
+        self.action_space = gym.spaces.Box(low=-1, high=1,
+                                           shape=(1, ), dtype=np.float32)#(5
+        
+        n_obs =  9#4 + 8*self.n_robots_blue + 2*self.n_robots_yellow
+        self.observation_space = gym.spaces.Box(low=-self.NORM_BOUNDS,
+                                                high=self.NORM_BOUNDS,
+                                                shape=(n_obs, ),
+                                                dtype=np.float32)
+
+    
+        # Limit robot speeds
+        self.max_v = 2.5
+        self.max_w = 10
+        self.kick_speed_x = 5.0
+        self.dribble = True
+
+        self.goal_post_top = Ball(x=self.field.length/2, y=self.field.goal_width / 2)
+        self.goal_post_bot = Ball(x=self.field.length/2, y=-self.field.goal_width / 2)
+        self.goal_post_mid = Ball(x=self.field.length/2, y=0)
+        print("GP top: " +str(self.goal_post_top))
+        print("GP bot: " +str(self.goal_post_bot))
+        print("GP mid: " +str(self.goal_post_mid))
+
+
+        print('Environment initialized')
+
+    def reset(self):
+        self.dribble = True
+
+        self.reward_shaping_total = None
+        return super().reset()
+
+    # def step(self, action):
+    #     observation, reward, done, _ = super().step(action)
+    #     return observation, reward, done, self.reward_shaping_total
+
+    def get_sin_angle_dist(self, rob, rob_ang,point2):
+        angle_between = math.atan2(point2.y - rob.y, point2.x - rob.x);
+        angle_diff = math.atan2(math.sin(angle_between-rob_ang), math.cos(angle_between-rob_ang))
+        angle_s = math.sin(angle_diff);
+        angle_c = math.cos(angle_diff);
+        dist_between = np.linalg.norm(np.array([point2.x, point2.y]) - np.array([rob.x, rob.y]))
+        return angle_s, angle_c, dist_between
+
+    def _frame_to_observations(self):
+
+        observation = []
+        
+        the_robot = self.frame.robots_blue[0]
+        rob_ang = np.deg2rad(the_robot.theta)
+        
+
+        #get top of goal post Using ball because it exists(could create new type)
+        angle_2goal_top_s, angle_2goal_top_c, dist_2goal_top = self.get_sin_angle_dist(the_robot, rob_ang, self.goal_post_top)
+
+        observation.append(angle_2goal_top_s)
+        observation.append(angle_2goal_top_c) 
+        observation.append(dist_2goal_top)
+        
+        
+        #get bottom goal post
+        angle_2goal_bot_s, angle_2goal_bot_c, dist_2goal_bot = self.get_sin_angle_dist(the_robot, rob_ang, self.goal_post_bot)
+
+        observation.append(angle_2goal_bot_s)
+        observation.append(angle_2goal_bot_c) 
+        observation.append(dist_2goal_bot)
+
+        #ball info
+        angle_2ball_s, angle_2ball_c, dist_robot_ball = self.get_sin_angle_dist(the_robot, rob_ang, self.frame.ball)
+
+        observation.append(angle_2ball_s)
+        observation.append(angle_2ball_c)
+        observation.append(dist_robot_ball)
+
+        return np.array(observation, dtype=np.float32)
+
+        
+        # v_x, v_y, v_theta= self.frame.robots_blue[0].v_x, self.frame.robots_blue[0].v_y, np.deg2rad(self.frame.robots_blue[0].v_theta)
+        # v_x, v_y = v_x*np.cos(rob_ang) + v_y*np.sin(rob_ang),\
+        #     -v_x*np.sin(rob_ang) + v_y*np.cos(rob_ang)
+
+        # observation.append(v_x)
+        # observation.append(v_y)
+        # observation.append(v_theta)
+
+        # observation.append(self.norm_pos(self.frame.ball.x))
+        # observation.append(self.norm_pos(self.frame.ball.y))
+        # observation.append(self.norm_v(self.frame.ball.v_x))
+        # observation.append(self.norm_v(self.frame.ball.v_y))
+
+
+
+        # for i in range(self.n_robots_blue):
+        #     observation.append(self.norm_pos(self.frame.robots_blue[i].x))
+        #     observation.append(self.norm_pos(self.frame.robots_blue[i].y))
+        #     observation.append(
+        #         np.sin(np.deg2rad(self.frame.robots_blue[i].theta))
+        #     )
+        #     observation.append(
+        #         np.cos(np.deg2rad(self.frame.robots_blue[i].theta))
+        #     )
+        #     observation.append(self.norm_v(self.frame.robots_blue[i].v_x))
+        #     observation.append(self.norm_v(self.frame.robots_blue[i].v_y))
+        #     observation.append(self.norm_w(self.frame.robots_blue[i].v_theta))
+        #     observation.append(1 if self.frame.robots_blue[i].infrared else 0)
+
+        # for i in range(self.n_robots_yellow):
+        #     observation.append(self.norm_pos(self.frame.robots_yellow[i].x))
+        #     observation.append(self.norm_pos(self.frame.robots_yellow[i].y))
+
+        return np.array(observation, dtype=np.float32)
+
+    def _get_commands(self, actions):
+        commands = []
+
+        #actions[0 X Direction Speed, 1 Y Direction Speed  (%), 2 theta,3 Kick x Speed  (%),4 dribbler (%) (true if % is positive)]
+        
+        #if(actions[3] > 0):#Set dribble to false after kick
+        #    self.dribble = False
+        if(not self.frame.robots_blue[0].infrared):
+            print ("warning")
+        angle = self.frame.robots_blue[0].theta
+        v_x, v_y, v_theta = self.convert_actions([0,0, actions[0]], np.deg2rad(angle))
+        cmd = Robot(yellow=False, id=0, v_x=v_x, v_y=v_y, v_theta=v_theta,
+                    kick_v_x= 0,#self.kick_speed_x if actions[1] > 2 else 0., 
+                    dribbler=self.dribble)
+
+        
+        # cmd = Robot(yellow=False, id=0, v_x=v_x, v_y=v_y, v_theta=v_theta,
+        #             kick_v_x=self.kick_speed_x if actions[3] > 0 else 0., 
+        #             dribbler=True if actions[4] > 0 else False)
+        commands.append(cmd)
+
+        # if(actions[3] > 0):#Set dribble to false after kick
+        #     self.dribble = False
+
+        # angle = self.frame.robots_blue[0].theta
+        # v_x, v_y, v_theta = self.convert_actions(actions, np.deg2rad(angle))
+        # cmd = Robot(yellow=False, id=0, v_x=v_x, v_y=v_y, v_theta=v_theta,
+        #             kick_v_x=self.kick_speed_x if actions[3] > 0 else 0., 
+        #             dribbler=self.dribble)
+        # # cmd = Robot(yellow=False, id=0, v_x=v_x, v_y=v_y, v_theta=v_theta,
+        # #             kick_v_x=self.kick_speed_x if actions[3] > 0 else 0., 
+        # #             dribbler=True if actions[4] > 0 else False)
+        # commands.append(cmd)
+
+        return commands
+
+    def convert_actions(self, action, angle):
+        """Denormalize, clip to absolute max and convert to local"""
+        # Denormalize
+        v_x = action[0] * self.max_v
+        v_y = action[1] * self.max_v
+        v_theta = action[2] * self.max_w
+
+        # clip by max absolute
+        v_norm = np.linalg.norm([v_x,v_y])
+        c = v_norm < self.max_v or self.max_v / v_norm
+        v_x, v_y = v_x*c, v_y*c
+        
+        #return 0,0,0
+        return v_x, v_y, v_theta
+
+    
+    def is_out_of_bounds(self, point):
+        if(abs(point.y)>self.field.width / 2):
+            return True
+        elif(abs(point.x)>self.field.length / 2):
+            return True
+        return False
+
+    
+    def _calculate_reward_and_done(self):
+        reward = 0
+        done = 0
+
+        ball = self.frame.ball
+        robot = self.frame.robots_blue[0]
+        robot_ang = np.deg2rad(robot.theta)
+        
+        # half_len = 
+        # half_wid = self.field.width / 2
+        # pen_len = self.field.penalty_length
+        # half_pen_wid = self.field.penalty_width / 2
+        # half_goal_wid = self.field.goal_width / 2
+        
+        #Distance Reward
+        #dist_robot_ball = np.linalg.norm(np.array([ball.x, ball.y]) - np.array([robot.x, robot.y]))
+        #reward+= ((5.0/math.sqrt(2.0*math.pi))*math.exp(-(dist_robot_ball*dist_robot_ball)/2.0) )- 2.0; 
+
+        #Faceball reward
+        angle_to_top = math.atan2(self.goal_post_top.y - robot.y, self.goal_post_top.x - robot.x);
+        angle_to_bottom = math.atan2(self.goal_post_bot.y - robot.y, self.goal_post_bot.x - robot.x);
+
+        #print("angle to top"+ str(angle_to_top))
+        #print("angle facing"+ str(robot_ang))
+        #print("angle to bot"+ str(angle_to_bottom))
+        #if robot facing between goal post
+        if(angle_to_bottom <= robot_ang and robot_ang <= angle_to_top):
+            reward+= 100#1/math.pi
+        else:
+            #Otherwise, we choose the closest angle, and base reward on getting closer to that.
+            angle_diff_top = math.atan2(math.sin(angle_to_top-robot_ang), math.cos(angle_to_top-robot_ang))
+            angle_diff_bot = math.atan2(math.sin(angle_to_bottom-robot_ang), math.cos(angle_to_bottom-robot_ang))
+            if(abs(angle_diff_top) < abs(angle_diff_bot)):
+                angle_diff = angle_diff_top 
+            else: 
+                angle_diff = angle_diff_bot
+            reward += (1.0/math.sqrt(2.0*math.pi))*math.exp(-2.0*(abs(angle_diff)/(math.pi*math.pi)));
+
+
+        #Checking if ball is in goal or out of bounds.
+        # if( ball.x > self.field.length / 2 and abs(ball.y) < self.field.goal_width / 2):
+        #         done = True
+        #         reward += 100 
+        # elif( self.is_out_of_bounds(ball) ):#this has to happen after... otherwise if ball in goal, it would be considered out of bounds
+        #     done = True
+        #     reward = 0
+        
+
+        #print(reward)
+        #done = reward
+
+        return reward, done
+
+
+
+        #OLLLLLD
+        if self.reward_shaping_total is None:
+            self.reward_shaping_total = {
+                'goal': 0,
+                'rbt_in_gk_area': 0,
+                'done_ball_out': 0,
+                'done_ball_out_right': 0,
+                'done_rbt_out': 0,
+                'ball_dist': 0,
+                'ball_grad': 0,
+                'energy': 0
+            }
+        reward = 0
+        done = False
+        
+        # Field parameters
+        half_len = self.field.length / 2
+        half_wid = self.field.width / 2
+        pen_len = self.field.penalty_length
+        half_pen_wid = self.field.penalty_width / 2
+        half_goal_wid = self.field.goal_width / 2
+        
+        ball = self.frame.ball
+        robot = self.frame.robots_blue[0]
+        
+        def robot_in_gk_area(rbt):
+            return rbt.x > half_len - pen_len and abs(rbt.y) < half_pen_wid
+        
+        # Check if robot exited field right side limits
+        if robot.x < -0.2 or abs(robot.y) > half_wid:
+            done = True
+            self.reward_shaping_total['done_rbt_out'] += 1
+        # If flag is set, end episode if robot enter gk area
+        elif not self.enter_goal_area and robot_in_gk_area(robot):
+            done = True
+            self.reward_shaping_total['rbt_in_gk_area'] += 1
+        # Check ball for ending conditions
+        elif ball.x < 0 or abs(ball.y) > half_wid:
+            done = True
+            self.reward_shaping_total['done_ball_out'] += 1
+        elif ball.x > half_len:
+            done = True
+            if abs(ball.y) < half_goal_wid:
+                reward = 5 
+                self.reward_shaping_total['goal'] += 1
+            else:
+                reward = 0
+                self.reward_shaping_total['done_ball_out_right'] += 1
+        elif self.last_frame is not None:
+            ball_dist_rw = self.__ball_dist_rw() / self.ball_dist_scale
+            self.reward_shaping_total['ball_dist'] += ball_dist_rw
+            
+            ball_grad_rw = self.__ball_grad_rw() / self.ball_grad_scale
+            self.reward_shaping_total['ball_grad'] += ball_grad_rw
+            
+            energy_rw = -self.__energy_pen() / self.energy_scale
+            self.reward_shaping_total['energy'] += energy_rw
+            
+            reward = reward\
+                    + ball_dist_rw\
+                    + ball_grad_rw\
+                    + energy_rw
+            
+
+        done = done
+
+        return reward, done
+    
+    def _get_initial_positions_frame(self):
+        '''Returns the position of each robot and ball for the initial frame'''
+        if self.random_init:
+            half_len = self.field.length / 2
+            half_wid = self.field.width / 2
+            penalty_len = self.field.penalty_length
+            def x(): return random.uniform(0.3, half_len - penalty_len - 0.3)
+            def y(): return random.uniform(-half_wid + 0.1, half_wid - 0.1)
+            def theta(): return random.uniform(0, 360)
+        else:
+            def x(): return self.field.length / 4
+            def y(): return self.field.width / 8
+            def theta(): return 0
+
+        pos_frame: Frame = Frame()
+
+        
+        pos_frame.robots_blue[0] = Robot(x=x(), y=y(), theta=theta())
+        d_ball_rbt = (self.field.ball_radius + self.field.rbt_radius)*1.005
+        rob_ang = np.deg2rad(pos_frame.robots_blue[0].theta)
+
+        pos_frame.ball = Ball(x=pos_frame.robots_blue[0].x +  math.cos(rob_ang)*d_ball_rbt,\
+                               y= pos_frame.robots_blue[0].y + math.sin(rob_ang)*d_ball_rbt  )
+
+        
+
+        return pos_frame
+    
+    # def __ball_dist_rw(self):
+    #     assert(self.last_frame is not None)
+        
+    #     # Calculate previous ball dist
+    #     last_ball = self.last_frame.ball
+    #     last_robot = self.last_frame.robots_blue[0]
+    #     last_ball_pos = np.array([last_ball.x, last_ball.y])
+    #     last_robot_pos = np.array([last_robot.x, last_robot.y])
+    #     last_ball_dist = np.linalg.norm(last_robot_pos - last_ball_pos)
+        
+    #     # Calculate new ball dist
+    #     ball = self.frame.ball
+    #     robot = self.frame.robots_blue[0]
+    #     ball_pos = np.array([ball.x, ball.y])
+    #     robot_pos = np.array([robot.x, robot.y])
+    #     ball_dist = np.linalg.norm(robot_pos - ball_pos)
+        
+    #     ball_dist_rw = last_ball_dist - ball_dist
+        
+    #     if ball_dist_rw > 1:
+    #         print("ball_dist -> ", ball_dist_rw)
+    #         print(self.frame.ball)
+    #         print(self.frame.robots_blue)
+    #         print(self.frame.robots_yellow)
+    #         print("===============================")
+        
+    #     return np.clip(ball_dist_rw, -1, 1)
+
+    # def __ball_grad_rw(self):
+    #     assert(self.last_frame is not None)
+        
+    #     # Goal pos
+    #     goal = np.array([self.field.length/2, 0.])
+        
+    #     # Calculate previous ball dist
+    #     last_ball = self.last_frame.ball
+    #     ball = self.frame.ball
+    #     last_ball_pos = np.array([last_ball.x, last_ball.y])
+    #     last_ball_dist = np.linalg.norm(goal - last_ball_pos)
+        
+    #     # Calculate new ball dist
+    #     ball_pos = np.array([ball.x, ball.y])
+    #     ball_dist = np.linalg.norm(goal - ball_pos)
+        
+    #     ball_dist_rw = last_ball_dist - ball_dist
+        
+    #     if ball_dist_rw > 1:
+    #         print("ball_dist -> ", ball_dist_rw)
+    #         print(self.frame.ball)
+    #         print(self.frame.robots_blue)
+    #         print(self.frame.robots_yellow)
+    #         print("===============================")
+        
+    #     return np.clip(ball_dist_rw, -1, 1)
+
+    # def __energy_pen(self):
+    #     robot = self.frame.robots_blue[0]
+        
+    #     # Sum of abs each wheel speed sent
+    #     energy = abs(robot.v_wheel0)\
+    #         + abs(robot.v_wheel1)\
+    #         + abs(robot.v_wheel2)\
+    #         + abs(robot.v_wheel3)
+            
+    #     return energy
