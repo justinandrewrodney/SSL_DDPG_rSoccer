@@ -33,7 +33,7 @@ class SSLShootCMUEnv(SSLBaseEnv):
             
     """
 
-    def __init__(self, field_type=1, random_init=False, enter_goal_area=False):
+    def __init__(self, field_type=1, random_init=False, enter_goal_area=False, burn_in=False):
         super().__init__(field_type=field_type, n_robots_blue=1, 
                          n_robots_yellow=0, time_step=0.03)
         self.random_init = random_init
@@ -41,7 +41,7 @@ class SSLShootCMUEnv(SSLBaseEnv):
         self.action_space = gym.spaces.Box(low=-1, high=1,
                                            shape=(2, ), dtype=np.float32)
         
-        n_obs =10
+        n_obs = 10#10
         self.observation_space = gym.spaces.Box(low=-self.NORM_BOUNDS,
                                                 high=self.NORM_BOUNDS,
                                                 shape=(n_obs, ),
@@ -52,6 +52,9 @@ class SSLShootCMUEnv(SSLBaseEnv):
         self.max_w = 10
         self.kick_speed_x = 5.0
         self.kicked = False
+        self.just_kicked = False
+        self.kick_angle = None
+
 
         self.goal_post_top = Ball(x=self.field.length/2, y=self.field.goal_width / 2)
         self.goal_post_bot = Ball(x=self.field.length/2, y=-self.field.goal_width / 2)
@@ -59,14 +62,22 @@ class SSLShootCMUEnv(SSLBaseEnv):
         
 
         self.cur_episode = 0
-        self.burning_in = True
+        self.burning_in = False#burn_in
         self.burn_in_time = 400
         
-        print('Environment initialized: SSL-ShootCMU')
+        print(self.goal_post_bot)
+        self.start = True
+        
+        print('Environment initialized: SSL-ShootShortNew')
 
     def reset(self):
         self.reward_shaping_total = None
         self.kicked = False
+        self.just_kicked = False
+        self.kick_angle = None
+
+
+        self.start = True
 
         self.cur_episode +=1
         if(self.burning_in and self.cur_episode >= self.burn_in_time):
@@ -75,9 +86,11 @@ class SSLShootCMUEnv(SSLBaseEnv):
         return super().reset()
 
     def step(self, action):
-        if(self.steps==0):
+        if(self.start):
             for i in range(3):
                 super().step(np.array([0.,0],  dtype=np.float32))
+            self.steps = 0
+            self.start = False
         observation, reward, done, _ = super().step(action)
         #if(action[1]>0):
         #    print(self.frame.ball.v_x,self.frame.ball.v_y )
@@ -99,9 +112,14 @@ class SSLShootCMUEnv(SSLBaseEnv):
         rob_ang = np.deg2rad(the_robot.theta)
         ball = self.frame.ball
 
-        #angle_2ball_s, angle_2ball_c, dist_robot_ball = self.get_sin_angle_dist(the_robot, rob_ang, self.frame.ball)
         
-        ball_x, ball_y = ball.x  - the_robot.x, ball.y - the_robot.y
+
+        # angle_2ball_s, angle_2ball_c, dist_ball = self.get_sin_angle_dist(the_robot, rob_ang, ball)
+        # observation.append(angle_2ball_s)
+        # observation.append(angle_2ball_c)
+        # observation.append(dist_ball)
+
+        ball_x, ball_y = ball.x - the_robot.x, ball.y- the_robot.y
         ball_x, ball_y = ball_x*np.cos(rob_ang) + ball_y*np.sin(rob_ang),\
             -ball_x*np.sin(rob_ang) + ball_y*np.cos(rob_ang)
         #PBx, P By,
@@ -115,9 +133,25 @@ class SSLShootCMUEnv(SSLBaseEnv):
         observation.append(ball_v_x)
         observation.append(ball_v_y)
         
+        
+        """
+        
+        """
+        #dist_to_ball = np.linalg.norm(np.array([ball.x, ball.y]) - np.array([the_robot.x, the_robot.y]))
+        #observation.append(dist_to_ball)
+
+        # observation.append(
+        #         np.sin(np.deg2rad(the_robot.theta))
+        # )
+        
+        # observation.append(
+        #     np.cos(np.deg2rad(the_robot.theta))
+        # )
+
+        
         # ωR
         robot_v_theta=np.deg2rad(self.frame.robots_blue[0].v_theta)
-        observation.append( np.deg2rad(robot_v_theta) )
+        observation.append( robot_v_theta )
 
         # dr−g
         dist_to_goal = np.linalg.norm(np.array([self.goal_post_mid.x, self.goal_post_mid.y]) - np.array([the_robot.x, the_robot.y]))
@@ -137,24 +171,43 @@ class SSLShootCMUEnv(SSLBaseEnv):
         observation.append(angle_2bottom_c)
         #observation.append(dist_robot_bottom)
         
+        # """Delete"""
+        # print("ball_x",ball_x)
+        # print("ball_y",ball_y)
+        # print("ball_v_x",ball_v_x)
+        # print("ball_v_y",ball_v_y)
+        # print("robot_v_theta",robot_v_theta)
+        # print("dist_to_goal",dist_to_goal)
 
+        # print("angle_2top_s",angle_2top_s)
+        # print("angle_2top_c",angle_2top_c)
+        # print("angle_2bottom_s",angle_2bottom_s)
+        # print("angle_2bottom_c",angle_2bottom_c)
+        # ###############
         return np.array(observation, dtype=np.float32)
 
     def _get_commands(self, actions):
         commands = []
 
-        if(self.steps >3):
-            angle = self.frame.robots_blue[0].theta
-            v_theta = actions[0]*self.max_w
+        #if(self.steps >3):
+        angle = self.frame.robots_blue[0].theta
+        v_theta = actions[0]*self.max_w
+        
+        if (actions[1]>0):
+            # if(not self.kicked):
+            #      print("Kicked!")
+            if(not self.kicked):#if we have not kicked before. Set just kicked to true.
+                self.just_kicked = True
+                self.kick_angle = angle
             
+            self.kicked = True
             
-            #if (actions[1]>0):
-            #    print("kick" +str(self.steps))
-            #     self.kicked = True
-            cmd = Robot(yellow=False, id=0, v_x=0, v_y=0, v_theta=v_theta, kick_v_x=self.kick_speed_x if actions[1]>0 else 0.,
-                                                                dribbler=True if self.frame.robots_blue[0].infrared else False)
-        else:       #Have to dribble first 3 steps to ensure ball is grabbed
-            cmd = Robot(yellow=False, id=0, v_x=0, v_y=0, v_theta=0, kick_v_x=0,dribbler=True)
+
+            
+        cmd = Robot(yellow=False, id=0, v_x=0, v_y=0, v_theta=v_theta, kick_v_x=self.kick_speed_x if actions[1]>0 else 0.,
+                                        dribbler=True if self.frame.robots_blue[0].infrared and not self.kicked else False)
+        #else:       #Have to dribble first 3 steps to ensure ball is grabbed
+        #    cmd = Robot(yellow=False, id=0, v_x=0, v_y=0, v_theta=0, kick_v_x=0,dribbler=True)
 
         commands.append(cmd)
         return commands
@@ -221,14 +274,28 @@ class SSLShootCMUEnv(SSLBaseEnv):
             done = True
             if abs(ball.y) < half_goal_wid:
                 reward = 20
+                print("Goal")
                 self.reward_shaping_total['goal'] += 1
             else:
                 self.reward_shaping_total['done_ball_out_right'] += 1
         elif self.last_frame is not None:
-
+            #if(self.kicked):
+            #    done = True
             angle_goal_rw = self.__angle_goal_rw()
+            #print("angle: ", angle_goal_rw)
+
+            #face_goal_rw = self.__face_goal_rw()
+            #print("face: ", face_goal_rw)
+
             
-            reward = angle_goal_rw                    
+            reward = angle_goal_rw #+ face_goal_rw
+            #import time
+            #print("Reward: ", reward)
+            #time.sleep(1)
+            #reward = face_goal_rw
+            if(self.just_kicked):
+                self.just_kicked=False
+                           
 
         done = done
 
@@ -253,7 +320,7 @@ class SSLShootCMUEnv(SSLBaseEnv):
         #spawn ball and robot together
         rob_x, rob_y, rob_theta = x(), y(), theta()
         
-        if (self.cur_episode < self.burn_in_time):
+        if (self.burning_in and self.cur_episode < self.burn_in_time):
             rob_theta = math.atan2(self.goal_post_mid.y - rob_y, self.goal_post_mid.x - rob_x);
             
         pos_frame.robots_blue[0] = Robot(x=rob_x, y=rob_y, theta=np.rad2deg(rob_theta)) 
@@ -264,14 +331,15 @@ class SSLShootCMUEnv(SSLBaseEnv):
                                y= pos_frame.robots_blue[0].y + math.sin(rob_ang)*d_ball_rbt  )
 
         return pos_frame
-    
+
+
     def __angle_goal_rw(self):
+        #assert(self.kick_angle is not None)
         ball = self.frame.ball
         
         robot = self.frame.robots_blue[0]
         robot_ang = np.deg2rad(robot.theta)
-        
-        ball_vel = np.linalg.norm(np.array([ball.v_x, ball.v_y]))
+        ball_vel = np.linalg.norm(np.array([ball.v_x, ball.v_y])) 
 
 
         #angle from robot to goal top
@@ -287,11 +355,49 @@ class SSLShootCMUEnv(SSLBaseEnv):
 
         angle_diff_larger = max(abs(angle_diff_bot), abs(angle_diff_top))
         if(angle_diff_larger <= angle_for_goal): #if robot facing between goal posts
-            # print("REward towards: " +str(.05*(angle_for_goal - angle_diff_larger)*kick_multiplier))
-            return .5*(angle_for_goal - angle_diff_larger)*ball_vel
+            if(self.just_kicked):
+                print("Reward towards: " +str((.05*(angle_for_goal - angle_diff_larger)*ball_vel)))
+
+            #return math.exp(.5*(angle_for_goal - angle_diff_larger)/angle_for_goal + ball_vel )
+            return .05*(angle_for_goal - angle_diff_larger)*ball_vel #+ (10 if self.just_kicked else 0) - (.25 if not self.kicked else 0)
+            #return .05*(angle_for_goal - angle_diff_larger)*ball_vel
+
         else: 
             #if robot facing away from goal posts penalize(value will be negative)
-            # print("Reward Away: " +str((angle_for_goal - angle_diff_larger)*kick_multiplier))
-            return (angle_for_goal - angle_diff_larger)*ball_vel
+            if(self.just_kicked):
+                print("Reward Away: " +str((angle_for_goal - angle_diff_larger)*ball_vel))
+            #return (angle_for_goal - angle_diff_larger)*ball_vel
+            return (angle_for_goal - angle_diff_larger)*ball_vel #-.25
+    
 
+
+    def __face_goal_rw(self):
+        assert(self.last_frame is not None)
+
+        if (self.kicked):
+            return 0
+
+        robot = self.frame.robots_blue[0]
+        robot_ang = np.deg2rad(robot.theta)
+        
+        # angle_between_top = math.atan2(self.goal_post_top.y - robot.y, self.goal_post_top.x - robot.x);
+        # angle_between_bottom = math.atan2(self.goal_post_bot.y - robot.y, self.goal_post_bot.x - robot.x);
+        
+        # if(angle_between_bottom <= robot_ang and robot_ang<= angle_between_top):
+        #     return 0
+
+        #angle from robot to goal top
+        angle_between_mid = math.atan2(self.goal_post_mid.y - robot.y, self.goal_post_mid.x - robot.x);
+        #Difference in radians between where robot is facing and top of goal area
+        angle_diff_mid = math.atan2(math.sin(angle_between_mid-robot_ang), math.cos(angle_between_mid-robot_ang))
+
+        last_robot = self.last_frame.robots_blue[0]
+        last_robot_ang = np.deg2rad(last_robot.theta)
+
+        #angle from robot to goal top
+        last_angle_between_mid = math.atan2(self.goal_post_mid.y - last_robot.y, self.goal_post_mid.x - last_robot.x);
+        #Difference in radians between where robot is facing and top of goal area
+        last_angle_diff_mid = math.atan2(math.sin(last_angle_between_mid-last_robot_ang), math.cos(last_angle_between_mid-last_robot_ang))
+
+        return (abs(last_angle_diff_mid)- abs(angle_diff_mid)) #/(self.max_v*self.time_step)
  
