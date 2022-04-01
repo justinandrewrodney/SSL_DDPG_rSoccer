@@ -1,7 +1,7 @@
 from gym.envs.registration import register
 
 
-register(id='SSLGoToBall-v0',
+register(id='SSLGoToBall-v1',
          entry_point='envs.ssl_go_to_ball:SSLGoToBallEnv',
          kwargs={'field_type': 2, 'n_robots_yellow': 0},
          max_episode_steps=1200
