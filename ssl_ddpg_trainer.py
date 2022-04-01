@@ -17,14 +17,14 @@ from replaybuffer import ReplayBuffer
     modules(not the wrapper module used in the example)  and allow models to be exported as TorchScript 
     to allow deployment of the models into C++ systems
 """
-def test(env_fn, actor_model_path, max_ep_len, num_test_episodes = 10, logger_kwargs=dict()):
+def test(env_fn,exp_name,env_name, actor_model_path, max_ep_len, num_test_episodes = 10, logger_kwargs=dict()):
     #import io
     test_env = env_fn()
     act_limit = test_env.action_space.high[0]
 
 
     print("Loading")
-    actor = torch.jit.load("models/actors/"+actor_model_path, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+    actor = torch.jit.load("models/"+env_name+"/"+exp_name+"/"+actor_model_path, map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
     print(actor.code)
     print("Loaded!")
 
@@ -208,21 +208,31 @@ def train(env_fn, env_name, max_ep_len, actor_init=Actor, critic_init=Critic,  s
     #logger.setup_pytorch_saver(ac)
     logger.setup_pytorch_saver(actor)
     logger.setup_pytorch_saver(critic)
-
-    #*                                                                  *
     #*                      End setup                                   *
+
     #*         **START DEFINING FUNCTIONS FOR TRAINING                  *
-    #*                                                                  *
-
     def savePtFiles():
-        actor.save(pytorch_save_path+"/"+logger_kwargs['exp_name']+ str(epoch)+'.pt')
-        actor.save(pytorch_save_path+"/actors/"+logger_kwargs['exp_name']+"_actor_local_"+ str(epoch)+'.pt')
-        critic.save(pytorch_save_path+"/critics/"+logger_kwargs['exp_name'] +"_critic_local_"+ str(epoch)+'.pt')
-        actor_targ.save(pytorch_save_path+"/targets/"+logger_kwargs['exp_name']+"_actor_targ_"+ str(epoch)+'.pt')
-        critic_targ.save(pytorch_save_path+"/targets/"+ logger_kwargs['exp_name'] +"_critic_targ_"+ str(epoch)+'.pt')
-        print("Pytorch models (epoch:" +str(epoch) +") saved in: " +str(pytorch_save_path) +
-                        "\nexample(actor): "+pytorch_save_path+"/"+logger_kwargs['exp_name']+ str(epoch)+'.pt')
+        actor.save(pytorch_save_path+"/"+logger_kwargs['exp_name']+ str(epoch+1)+'.pt')
+        actor.save(pytorch_save_path+"/actors/"+logger_kwargs['exp_name']+"_actor_local_"+ str(epoch+1)+'.pt')
+        critic.save(pytorch_save_path+"/critics/"+logger_kwargs['exp_name'] +"_critic_local_"+ str(epoch+1)+'.pt')
+        actor_targ.save(pytorch_save_path+"/targets/"+logger_kwargs['exp_name']+"_actor_targ_"+ str(epoch+1)+'.pt')
+        critic_targ.save(pytorch_save_path+"/targets/"+ logger_kwargs['exp_name'] +"_critic_targ_"+ str(epoch+1)+'.pt')
+        print("Pytorch models (epoch:" +str(epoch+1) +") saved in: " +str(pytorch_save_path) +
+                        "\nexample(actor): "+pytorch_save_path+"/"+logger_kwargs['exp_name']+ str(epoch+1)+'.pt')
 
+    def log_end_of_epoch():
+        # Log info about epoch
+        logger.log_tabular('Epoch', epoch+1)
+        logger.log_tabular('EpRet', with_min_and_max=True)
+        logger.log_tabular('TestEpRet', with_min_and_max=True)
+        logger.log_tabular('EpLen', average_only=True)
+        logger.log_tabular('TestEpLen', average_only=True)
+        logger.log_tabular('TotalEnvInteracts', t)
+        logger.log_tabular('QVals', with_min_and_max=True)
+        logger.log_tabular('LossPi', average_only=True)
+        logger.log_tabular('LossQ', average_only=True)
+        logger.log_tabular('Time', time.time()-start_time)
+        logger.dump_tabular()
     # Set up function for computing DDPG Q-loss
     def compute_loss_q(data):
         o, a, r, o2, d = data['obs'], data['act'], data['rew'], data['obs2'], data['done']
@@ -304,13 +314,10 @@ def train(env_fn, env_name, max_ep_len, actor_init=Actor, critic_init=Critic,  s
                 ep_ret += r
                 ep_len += 1
             logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
-            write_to_csv(pytorch_save_path+"/testperformance.csv",str(epoch+1)+','+str(j)+','+str(ep_ret)+','+str(ep_len)+','+str(d)+','+'\n')
-
-    
-    #*                                                                  *
+            write_to_csv(pytorch_save_path+"/testperformance.csv",str(epoch+1)+','+str(j)+','+str(ep_ret)+','+str(ep_len)+','+str(d)+','+'\n')    
     #*                   End train functions                            *
+
     #*                 **START TRAINING LOOP**                          *
-    #*                                                                  *
     # Prepare for interaction with environment
     start_time = time.time()
     o, ep_ret, ep_len = env.reset(), 0, 0
@@ -334,6 +341,7 @@ def train(env_fn, env_name, max_ep_len, actor_init=Actor, critic_init=Critic,  s
             # Step the env
             o2, r, d, _ = env.step(act_limit*a)
             #env.render()
+            #time.sleep(.5)
             #print("********\nstep: "+str(t)+"Reward: "+str(r)+"\nobs2: "+str(o2))
 
             ep_ret += r
@@ -357,41 +365,29 @@ def train(env_fn, env_name, max_ep_len, actor_init=Actor, critic_init=Critic,  s
             
             t+=1
             
-            #**********End of episode***************************
+            #**          End of episode                 **
             if(d or ep_len==max_ep_len):
                 #Log end of episode
                 logger.store(EpRet=ep_ret, EpLen=ep_len)
-                write_to_csv(pytorch_save_path+"/trainperformance.csv", str(epoch)+','+str(ep_number)+','+str(ep_ret)+','+str(ep_len)+','+str(d)+','+'\n')
+                write_to_csv(pytorch_save_path+"/trainperformance.csv", str(epoch)+','+str(ep_number)+','+str(ep_ret)+','+str(ep_len)+','+str(d)+',')
                 
                 #reset environment
                 o, ep_ret, ep_len = env.reset(), 0, 0
                 ep_number+=1            
 
         
-        # End of epoch handling
-
+        #**          End of epoch handling              **
         # Save model
         if ( (epoch+1) % save_freq == 0) or ( (epoch+1) == epochs):
-            #logger.save_state({'env': env}, epoch)
+            #logger.save_state({'env': env}, epoch) <this doesnt work with the rSoccer env
             savePtFiles()
 
         # Test the performance of the deterministic version of the agent.
         print("Testing")
         test_agent()
         print("Done\ntotal steps: " +str(t))
-
-        # Log info about epoch
-        logger.log_tabular('Epoch', epoch+1)
-        logger.log_tabular('EpRet', with_min_and_max=True)
-        logger.log_tabular('TestEpRet', with_min_and_max=True)
-        logger.log_tabular('EpLen', average_only=True)
-        logger.log_tabular('TestEpLen', average_only=True)
-        logger.log_tabular('TotalEnvInteracts', t)
-        logger.log_tabular('QVals', with_min_and_max=True)
-        logger.log_tabular('LossPi', average_only=True)
-        logger.log_tabular('LossQ', average_only=True)
-        logger.log_tabular('Time', time.time()-start_time)
-        logger.dump_tabular()
+        log_end_of_epoch()
+    #**          End of training              **
     print("Done training. Should have taken " +str(steps_per_epoch * epochs) + " steps. taken "+str(t))
 
 if __name__ == '__main__':
@@ -401,7 +397,7 @@ if __name__ == '__main__':
     parser.add_argument('--env', type=str, default='SSLGoToBallDDPG-v0')
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--exp_name', type=str, default='ddpg')
     parser.add_argument('--test_file_name', type=str, default='') #Specify which actor to load for test. Turns off training
     parser.add_argument('--r_test', type=int, default='5')  #How many epochs between rendering test episodes duringtraining
@@ -431,7 +427,7 @@ if __name__ == '__main__':
     logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
     
     if(should_load):
-        test(lambda : gym.make(args.env), max_ep_len = max_ep_st, actor_model_path=args.test_file_name, 
+        test(lambda : gym.make(args.env),exp_name=args.exp_name,env_name =args.env, max_ep_len = max_ep_st, actor_model_path=args.test_file_name, 
                                                         logger_kwargs=logger_kwargs,num_test_episodes=10)
     else:
         train(lambda : gym.make(args.env), env_name =args.env, 
