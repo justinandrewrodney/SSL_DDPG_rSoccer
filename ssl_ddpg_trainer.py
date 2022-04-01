@@ -7,6 +7,7 @@ import time
 import spinup.algos.pytorch.ddpg.core as core
 from spinup.utils.logx import EpochLogger
 import rsoccer_gym
+import envs
 
 #Modified from: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/ddpg/ddpg.py
 
