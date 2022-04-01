@@ -8,6 +8,8 @@ import spinup.algos.pytorch.ddpg.core as core
 from spinup.utils.logx import EpochLogger
 import rsoccer_gym
 
+#Modified from: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/ddpg/ddpg.py
+
 class NewMLPActor(torch.nn.Module):
 
     def __init__(self, obs_dim, act_dim, hidden_sizes, activation, act_limit):
