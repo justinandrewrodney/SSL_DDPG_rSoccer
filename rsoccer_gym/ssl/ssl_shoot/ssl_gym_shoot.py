@@ -6,6 +6,11 @@ import gym
 import numpy as np
 from rsoccer_gym.Entities import Frame, Robot, Ball
 from rsoccer_gym.ssl.ssl_gym_base import SSLBaseEnv
+
+"""
+Uses similar state-action-rewards as this paper
+https://zhuyifengzju.github.io/files/2018Robocup.pdf
+"""
 class SSLShootEnv(SSLBaseEnv):
     """The SSL robot needs to make a goal
 
@@ -41,7 +46,7 @@ class SSLShootEnv(SSLBaseEnv):
         self.action_space = gym.spaces.Box(low=-1, high=1,
                                            shape=(2, ), dtype=np.float32)
         
-        n_obs = 9#10
+        n_obs = 10#10
         self.observation_space = gym.spaces.Box(low=-self.NORM_BOUNDS,
                                                 high=self.NORM_BOUNDS,
                                                 shape=(n_obs, ),
@@ -68,7 +73,7 @@ class SSLShootEnv(SSLBaseEnv):
         print(self.goal_post_bot)
         self.start = True
         
-        print('Environment initialized: SSL-ShootShort2')
+        print('Environment initialized: SSL-ShootShortNew')
 
     def reset(self):
         self.reward_shaping_total = None
@@ -92,8 +97,6 @@ class SSLShootEnv(SSLBaseEnv):
             self.steps = 0
             self.start = False
         observation, reward, done, _ = super().step(action)
-        #if(action[1]>0):
-        #    print(self.frame.ball.v_x,self.frame.ball.v_y )
         return observation, reward, done, self.reward_shaping_total
 
     def get_sin_angle_dist(self, rob, rob_ang,point2):
@@ -112,8 +115,7 @@ class SSLShootEnv(SSLBaseEnv):
         rob_ang = np.deg2rad(the_robot.theta)
         ball = self.frame.ball
 
-        """
-        ball_x, ball_y = ball.x, ball.y
+        ball_x, ball_y = ball.x - the_robot.x, ball.y- the_robot.y
         ball_x, ball_y = ball_x*np.cos(rob_ang) + ball_y*np.sin(rob_ang),\
             -ball_x*np.sin(rob_ang) + ball_y*np.cos(rob_ang)
         #PBx, P By,
@@ -126,26 +128,26 @@ class SSLShootEnv(SSLBaseEnv):
         #V Bx, V By,
         observation.append(ball_v_x)
         observation.append(ball_v_y)
-        """
+        
         
         """
         
         """
-        dist_to_ball = np.linalg.norm(np.array([ball.x, ball.y]) - np.array([the_robot.x, the_robot.y]))
-        observation.append(dist_to_ball)
+        #dist_to_ball = np.linalg.norm(np.array([ball.x, ball.y]) - np.array([the_robot.x, the_robot.y]))
+        #observation.append(dist_to_ball)
 
-        observation.append(
-                np.sin(np.deg2rad(the_robot.theta))
-        )
+        # observation.append(
+        #         np.sin(np.deg2rad(the_robot.theta))
+        # )
         
-        observation.append(
-            np.cos(np.deg2rad(the_robot.theta))
-        )
+        # observation.append(
+        #     np.cos(np.deg2rad(the_robot.theta))
+        # )
 
         
         # ωR
         robot_v_theta=np.deg2rad(self.frame.robots_blue[0].v_theta)
-        observation.append( np.deg2rad(robot_v_theta) )
+        observation.append( robot_v_theta )
 
         # dr−g
         dist_to_goal = np.linalg.norm(np.array([self.goal_post_mid.x, self.goal_post_mid.y]) - np.array([the_robot.x, the_robot.y]))
@@ -165,13 +167,11 @@ class SSLShootEnv(SSLBaseEnv):
         observation.append(angle_2bottom_c)
         #observation.append(dist_robot_bottom)
         
-
         return np.array(observation, dtype=np.float32)
 
     def _get_commands(self, actions):
         commands = []
 
-        #if(self.steps >3):
         angle = self.frame.robots_blue[0].theta
         v_theta = actions[0]*self.max_w
         
@@ -184,32 +184,12 @@ class SSLShootEnv(SSLBaseEnv):
             
             self.kicked = True
             
-
-            
         cmd = Robot(yellow=False, id=0, v_x=0, v_y=0, v_theta=v_theta, kick_v_x=self.kick_speed_x if actions[1]>0 else 0.,
                                         dribbler=True if self.frame.robots_blue[0].infrared and not self.kicked else False)
-        #else:       #Have to dribble first 3 steps to ensure ball is grabbed
-        #    cmd = Robot(yellow=False, id=0, v_x=0, v_y=0, v_theta=0, kick_v_x=0,dribbler=True)
 
         commands.append(cmd)
         return commands
 
-    def convert_actions(self, action, angle):
-        """Denormalize, clip to absolute max and convert to local"""
-        # Denormalize
-        v_x = action[0] * self.max_v
-        v_y = action[1] * self.max_v
-        v_theta = action[2] * self.max_w
-        # Convert to local
-        v_x, v_y = v_x*np.cos(angle) + v_y*np.sin(angle),\
-            -v_x*np.sin(angle) + v_y*np.cos(angle)
-
-        # clip by max absolute
-        v_norm = np.linalg.norm([v_x,v_y])
-        c = v_norm < self.max_v or self.max_v / v_norm
-        v_x, v_y = v_x*c, v_y*c
-        
-        return v_x, v_y, v_theta
 
     def _calculate_reward_and_done(self):
         if self.reward_shaping_total is None:
@@ -255,27 +235,18 @@ class SSLShootEnv(SSLBaseEnv):
         elif ball.x > half_len:
             done = True
             if abs(ball.y) < half_goal_wid:
+                reward = 20
+                print("Goal")
                 self.reward_shaping_total['goal'] += 1
             else:
                 self.reward_shaping_total['done_ball_out_right'] += 1
         elif self.last_frame is not None:
-            #if(self.kicked):
-            #    done = True
             angle_goal_rw = self.__angle_goal_rw()
             
-            #print("angle: ", angle_goal_rw)
-
-            #face_goal_rw = self.__face_goal_rw()
-            #print("face: ", face_goal_rw)
-
-            
             reward = angle_goal_rw #+ face_goal_rw
-            #import time
-            #print("Reward: ", reward)
-            #time.sleep(1)
-            #reward = face_goal_rw
+            
             if(self.just_kicked):
-                self.just_kicked = False
+                self.just_kicked=False
                            
 
         done = done
@@ -320,8 +291,8 @@ class SSLShootEnv(SSLBaseEnv):
         
         robot = self.frame.robots_blue[0]
         robot_ang = np.deg2rad(robot.theta)
-        #robot_ang= self.kick_angle
-        ball_vel = np.linalg.norm(np.array([ball.v_x, ball.v_y])) #if not self.kicked else self.kick_speed_x
+        ball_vel = np.linalg.norm(np.array([ball.v_x, ball.v_y])) 
+
 
         #angle from robot to goal top
         angle_between_top = math.atan2(self.goal_post_top.y - robot.y, self.goal_post_top.x - robot.x);
@@ -338,33 +309,34 @@ class SSLShootEnv(SSLBaseEnv):
         if(angle_diff_larger <= angle_for_goal): #if robot facing between goal posts
             if(self.just_kicked):
                 print("Reward towards: " +str((.05*(angle_for_goal - angle_diff_larger)*ball_vel + 10 )))
-                # print("REward towards: " +str(.05*(angle_for_goal - angle_diff_larger)*ball_vel)+"\nballvel: "+str(ball_vel) +\
-                #             "\nAngle top: " +str(angle_between_top) +"\nAngle bot: " +str(robot_ang)+"\nangle bottom: "+str(angle_between_bottom)+ \
-                #             "\nangle larger: "+str(angle_diff_larger)+"\nangle4goal: "+str(angle_for_goal)+"\n\n")
 
             #return math.exp(.5*(angle_for_goal - angle_diff_larger)/angle_for_goal + ball_vel )
             return .05*(angle_for_goal - angle_diff_larger)*ball_vel + (10 if self.just_kicked else 0) - (.25 if not self.kicked else 0)
+            #return .05*(angle_for_goal - angle_diff_larger)*ball_vel
+
         else: 
             #if robot facing away from goal posts penalize(value will be negative)
             if(self.just_kicked):
                 print("Reward Away: " +str((angle_for_goal - angle_diff_larger)*ball_vel -.25))
-
+            #return (angle_for_goal - angle_diff_larger)*ball_vel
             return (angle_for_goal - angle_diff_larger)*ball_vel -.25
     
+
+
     def __face_goal_rw(self):
         assert(self.last_frame is not None)
 
         if (self.kicked):
-           return 0
-        
+            return 0
+
         robot = self.frame.robots_blue[0]
         robot_ang = np.deg2rad(robot.theta)
-
-        angle_between_top = math.atan2(self.goal_post_top.y - robot.y, self.goal_post_top.x - robot.x);
-        angle_between_bottom = math.atan2(self.goal_post_bot.y - robot.y, self.goal_post_bot.x - robot.x);
         
-        if(angle_between_bottom <= robot_ang and robot_ang<= angle_between_top):
-            return 0
+        # angle_between_top = math.atan2(self.goal_post_top.y - robot.y, self.goal_post_top.x - robot.x);
+        # angle_between_bottom = math.atan2(self.goal_post_bot.y - robot.y, self.goal_post_bot.x - robot.x);
+        
+        # if(angle_between_bottom <= robot_ang and robot_ang<= angle_between_top):
+        #     return 0
 
         #angle from robot to goal top
         angle_between_mid = math.atan2(self.goal_post_mid.y - robot.y, self.goal_post_mid.x - robot.x);
