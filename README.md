@@ -1,4 +1,4 @@
-#Setup
+# Setup
 You can use the environments and training script with rSoccer
 
 # SSL_DDPG_rSoccer
