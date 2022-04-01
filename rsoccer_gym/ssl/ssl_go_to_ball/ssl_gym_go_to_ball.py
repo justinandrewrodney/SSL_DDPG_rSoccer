@@ -8,7 +8,6 @@ from rsoccer_gym.Entities import Frame, Robot, Ball
 from rsoccer_gym.ssl.ssl_gym_base import SSLBaseEnv
 from rsoccer_gym.Utils import KDTree
 
-e
 
 """
 Uses similar state-action-rewards as this paper
