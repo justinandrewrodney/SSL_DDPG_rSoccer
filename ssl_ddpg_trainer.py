@@ -8,6 +8,7 @@ import spinup.algos.pytorch.ddpg.core as core
 from spinup.utils.logx import EpochLogger
 import rsoccer_gym
 import envs
+import os
 
 #Modified from: https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/ddpg/ddpg.py
 
@@ -331,8 +332,9 @@ def ddpg(env_fn, actor_critic=NewMLPActorCritic, ac_kwargs=dict(), seed=0,
             # Save model
             if (epoch % save_freq == 0) or (epoch == epochs):
                 #logger.save_state({'env': env}, None)
-                ac.pi.save('models/' + str(env.unwrapped.spec.id) + '/' + \
-                            logger_kwargs['exp_name']+ str(epoch+1) +'.pt')
+                save_path = 'models/' + env.unwrapped.spec.id 
+                os.makedirs(save_path, exist_ok=True)
+                ac.pi.save(save_path +'/'+ logger_kwargs['exp_name']+ str(epoch+1) +'.pt')
 
             # Test the performance of the deterministic version of the agent.
             test_agent()
