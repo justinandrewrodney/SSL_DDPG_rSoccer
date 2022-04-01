@@ -331,7 +331,7 @@ def ddpg(env_fn, actor_critic=NewMLPActorCritic, ac_kwargs=dict(), seed=0,
             # Save model
             if (epoch % save_freq == 0) or (epoch == epochs):
                 #logger.save_state({'env': env}, None)
-                ac.pi.save('models/' + env.unwrapped.spec.id + \
+                ac.pi.save('models/' + str(env.unwrapped.spec.id) + '/' + \
                             logger_kwargs['exp_name']+ str(epoch+1) +'.pt')
 
             # Test the performance of the deterministic version of the agent.
