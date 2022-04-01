@@ -179,7 +179,14 @@ def ddpg(env_fn, actor_critic=NewMLPActorCritic, ac_kwargs=dict(), seed=0,
 
     # Create actor-critic module and target networks
     ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
-    ac_targ = deepcopy(ac)
+
+    #Copy parameters to target
+    #ac_targ = deepcopy(ac)
+    ac_targ = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
+    with torch.no_grad():
+        for p, p_targ in zip(ac.parameters(), ac_targ.parameters()):
+            p_targ.data.mul_(0)
+            p_targ.data.add_(p.data)
 
     # Freeze target networks with respect to optimizers (only update via polyak averaging)
     for p in ac_targ.parameters():
@@ -323,7 +330,9 @@ def ddpg(env_fn, actor_critic=NewMLPActorCritic, ac_kwargs=dict(), seed=0,
 
             # Save model
             if (epoch % save_freq == 0) or (epoch == epochs):
-                logger.save_state({'env': env}, None)
+                #logger.save_state({'env': env}, None)
+                ac.pi.save('models/' + env.unwrapped.spec.id + \
+                            logger_kwargs['exp_name']+ str(epoch+1) +'.pt')
 
             # Test the performance of the deterministic version of the agent.
             test_agent()
@@ -344,7 +353,7 @@ def ddpg(env_fn, actor_critic=NewMLPActorCritic, ac_kwargs=dict(), seed=0,
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', type=str, default='HalfCheetah-v2')
+    parser.add_argument('--env', type=str, default='SSLGoToBall-v1')
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
