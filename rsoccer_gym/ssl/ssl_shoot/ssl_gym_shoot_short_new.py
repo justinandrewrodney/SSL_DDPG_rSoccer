@@ -114,11 +114,6 @@ class SSLShootShortNewEnv(SSLBaseEnv):
 
         
 
-        # angle_2ball_s, angle_2ball_c, dist_ball = self.get_sin_angle_dist(the_robot, rob_ang, ball)
-        # observation.append(angle_2ball_s)
-        # observation.append(angle_2ball_c)
-        # observation.append(dist_ball)
-
         ball_x, ball_y = ball.x - the_robot.x, ball.y- the_robot.y
         ball_x, ball_y = ball_x*np.cos(rob_ang) + ball_y*np.sin(rob_ang),\
             -ball_x*np.sin(rob_ang) + ball_y*np.cos(rob_ang)
@@ -151,7 +146,7 @@ class SSLShootShortNewEnv(SSLBaseEnv):
         
         # ωR
         robot_v_theta=np.deg2rad(self.frame.robots_blue[0].v_theta)
-        observation.append( np.deg2rad(robot_v_theta) )
+        observation.append( robot_v_theta )
 
         # dr−g
         dist_to_goal = np.linalg.norm(np.array([self.goal_post_mid.x, self.goal_post_mid.y]) - np.array([the_robot.x, the_robot.y]))
@@ -171,7 +166,19 @@ class SSLShootShortNewEnv(SSLBaseEnv):
         observation.append(angle_2bottom_c)
         #observation.append(dist_robot_bottom)
         
+        # """Delete"""
+        # print("ball_x",ball_x)
+        # print("ball_y",ball_y)
+        # print("ball_v_x",ball_v_x)
+        # print("ball_v_y",ball_v_y)
+        # print("robot_v_theta",robot_v_theta)
+        # print("dist_to_goal",dist_to_goal)
 
+        # print("angle_2top_s",angle_2top_s)
+        # print("angle_2top_c",angle_2top_c)
+        # print("angle_2bottom_s",angle_2bottom_s)
+        # print("angle_2bottom_c",angle_2bottom_c)
+        # ###############
         return np.array(observation, dtype=np.float32)
 
     def _get_commands(self, actions):
@@ -189,6 +196,8 @@ class SSLShootShortNewEnv(SSLBaseEnv):
                 self.kick_angle = angle
             
             self.kicked = True
+        #self.kicked = False
+        #actions[1] = 0
             
 
             
@@ -261,7 +270,7 @@ class SSLShootShortNewEnv(SSLBaseEnv):
         elif ball.x > half_len:
             done = True
             if abs(ball.y) < half_goal_wid:
-                reward = 20
+                reward = 5
                 print("Goal")
                 self.reward_shaping_total['goal'] += 1
             else:
@@ -269,18 +278,19 @@ class SSLShootShortNewEnv(SSLBaseEnv):
         elif self.last_frame is not None:
             #if(self.kicked):
             #    done = True
-            angle_goal_rw = self.__angle_goal_rw()
+            #angle_goal_rw = self.__angle_goal_rw()
             #print("angle: ", angle_goal_rw)
 
             #face_goal_rw = self.__face_goal_rw()
             #print("face: ", face_goal_rw)
 
             
-            reward = angle_goal_rw #+ face_goal_rw
+            #reward = angle_goal_rw #+ face_goal_rw
             #import time
             #print("Reward: ", reward)
             #time.sleep(1)
             #reward = face_goal_rw
+            reward = self.__face_goal_rw() + self.ball_to_goal_rew()
             if(self.just_kicked):
                 self.just_kicked=False
                            
@@ -358,34 +368,71 @@ class SSLShootShortNewEnv(SSLBaseEnv):
             return (angle_for_goal - angle_diff_larger)*ball_vel -.25
     
 
+    def ball_to_goal_rew(self):
+        assert(self.last_frame is not None)
+        if(not self.kicked):
+            return 0
+
+        ball = self.frame.ball
+
+        prev_ball = self.last_frame.ball
+
+        #Distance Reward
+        dist_ball_goal = np.linalg.norm(np.array([self.goal_post_mid.x, self.goal_post_mid.y]) - np.array([ball.x, ball.y]))
+        
+        prev_dist_ball_goal = np.linalg.norm(np.array([self.goal_post_mid.x, self.goal_post_mid.y]) - np.array([prev_ball.x, prev_ball.y]))
+
+        return (prev_dist_ball_goal - dist_ball_goal) / (self.kick_speed_x * self.time_step)
+
 
     def __face_goal_rw(self):
         assert(self.last_frame is not None)
-
-        if (self.kicked):
-            return 0
-
+        #face goal mid
         robot = self.frame.robots_blue[0]
         robot_ang = np.deg2rad(robot.theta)
+
+        prev_robot = self.last_frame.robots_blue[0]
+        prev_robot_ang = np.deg2rad(prev_robot.theta)
+
+        angle_between = math.atan2(self.goal_post_mid.y - robot.y, self.goal_post_mid.x - robot.x);
+        angle_diff = math.atan2(math.sin(angle_between-robot_ang), math.cos(angle_between-robot_ang))
+
+        prev_angle_between = math.atan2(self.goal_post_mid.y - prev_robot.y, self.goal_post_mid.x - prev_robot.x);
+        prev_angle_diff = math.atan2(math.sin(prev_angle_between-prev_robot_ang), math.cos(prev_angle_between-prev_robot_ang))
+
+        return (abs(prev_angle_diff) - abs(angle_diff)) / (self.max_w * self.time_step) #- (np.deg2rad(robot.v_theta)/self.max_w)*.5
+
         
-        # angle_between_top = math.atan2(self.goal_post_top.y - robot.y, self.goal_post_top.x - robot.x);
-        # angle_between_bottom = math.atan2(self.goal_post_bot.y - robot.y, self.goal_post_bot.x - robot.x);
+        # robot = self.frame.robots_blue[0]
+        # robot_ang = np.deg2rad(robot.theta)
         
-        # if(angle_between_bottom <= robot_ang and robot_ang<= angle_between_top):
-        #     return 0
+        # # angle_between_top = math.atan2(self.goal_post_top.y - robot.y, self.goal_post_top.x - robot.x);
+        # # angle_between_bottom = math.atan2(self.goal_post_bot.y - robot.y, self.goal_post_bot.x - robot.x);
+        
+        # # if(angle_between_bottom <= robot_ang and robot_ang<= angle_between_top):
+        # #     return 0
 
-        #angle from robot to goal top
-        angle_between_mid = math.atan2(self.goal_post_mid.y - robot.y, self.goal_post_mid.x - robot.x);
-        #Difference in radians between where robot is facing and top of goal area
-        angle_diff_mid = math.atan2(math.sin(angle_between_mid-robot_ang), math.cos(angle_between_mid-robot_ang))
+        # #angle from robot to goal top
+        # angle_between_mid = math.atan2(self.goal_post_mid.y - robot.y, self.goal_post_mid.x - robot.x);
+        # #Difference in radians between where robot is facing and top of goal area
+        # angle_diff_mid = math.atan2(math.sin(angle_between_mid-robot_ang), math.cos(angle_between_mid-robot_ang))
 
-        last_robot = self.last_frame.robots_blue[0]
-        last_robot_ang = np.deg2rad(last_robot.theta)
+        # # angle_between = math.atan2(self.goal_post_mid.y - robot.y, self.goal_post_mid.x - robot.x);
+        # # angle_diff = math.atan2(math.sin(angle_between-robot_ang), math.cos(angle_between-robot_ang))
 
-        #angle from robot to goal top
-        last_angle_between_mid = math.atan2(self.goal_post_mid.y - last_robot.y, self.goal_post_mid.x - last_robot.x);
-        #Difference in radians between where robot is facing and top of goal area
-        last_angle_diff_mid = math.atan2(math.sin(last_angle_between_mid-last_robot_ang), math.cos(last_angle_between_mid-last_robot_ang))
+        # # prev_angle_between = math.atan2(self.goal_post_mid.y - prev_robot.y, self.goal_post_mid.x - prev_robot.x);
+        # # prev_angle_diff = math.atan2(math.sin(prev_angle_between-prev_robot_ang), math.cos(prev_angle_between-prev_robot_ang))
 
-        return (abs(last_angle_diff_mid)- abs(angle_diff_mid)) #/(self.max_v*self.time_step)
+
+        
+        # """LAST FRAME"""
+        # last_robot = self.last_frame.robots_blue[0]
+        # last_robot_ang = np.deg2rad(last_robot.theta)
+
+        # #angle from robot to goal top
+        # last_angle_between_mid = math.atan2(self.goal_post_mid.y - last_robot.y, self.goal_post_mid.x - last_robot.x);
+        # #Difference in radians between where robot is facing and top of goal area
+        # last_angle_diff_mid = math.atan2(math.sin(last_angle_between_mid-last_robot_ang), math.cos(last_angle_between_mid-last_robot_ang))
+
+        # return (abs(last_angle_diff_mid)- abs(angle_diff_mid)) / (self.max_w * self.time_step)
  

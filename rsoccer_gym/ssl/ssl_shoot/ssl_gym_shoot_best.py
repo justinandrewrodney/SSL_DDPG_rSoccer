@@ -151,7 +151,7 @@ class SSLShootBestEnv(SSLBaseEnv):
         
         # ωR
         robot_v_theta=np.deg2rad(self.frame.robots_blue[0].v_theta)
-        observation.append( np.deg2rad(robot_v_theta) )
+        observation.append( robot_v_theta )
 
         # dr−g
         dist_to_goal = np.linalg.norm(np.array([self.goal_post_mid.x, self.goal_post_mid.y]) - np.array([the_robot.x, the_robot.y]))
@@ -171,7 +171,19 @@ class SSLShootBestEnv(SSLBaseEnv):
         observation.append(angle_2bottom_c)
         #observation.append(dist_robot_bottom)
         
+        # """Delete"""
+        # print("ball_x",ball_x)
+        # print("ball_y",ball_y)
+        # print("ball_v_x",ball_v_x)
+        # print("ball_v_y",ball_v_y)
+        # print("robot_v_theta",robot_v_theta)
+        # print("dist_to_goal",dist_to_goal)
 
+        # print("angle_2top_s",angle_2top_s)
+        # print("angle_2top_c",angle_2top_c)
+        # print("angle_2bottom_s",angle_2bottom_s)
+        # print("angle_2bottom_c",angle_2bottom_c)
+        # ###############
         return np.array(observation, dtype=np.float32)
 
     def _get_commands(self, actions):
