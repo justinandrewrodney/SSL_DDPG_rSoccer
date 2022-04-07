@@ -25,3 +25,10 @@ The trained models are saved as **Torch Scripts** so that they may be utilized i
 This also provides a modified SSLGoToBall environment that is modified for actions and states that are using the robots orientation as the starting frame, as well as different reward functions.
 
 If the training script in the top folder does not work, the ones in old_src will most definitely. The one in the top of the directory has less changes and is more similar to the spinningup script, but I have not had time to completely verify it.
+
+
+
+# Credits
+This work utilizes derivatives of Open Source software. Below is acknowledgements along with a link to each OpenSource liscense.
+[SpinningUp](https://github.com/openai/spinningup/blob/master/LICENSE)
+[rSoccer](https://github.com/robocin/rSoccer/blob/main/LICENSE)
