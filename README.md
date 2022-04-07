@@ -30,5 +30,7 @@ If the training script in the top folder does not work, the ones in old_src will
 
 # Credits
 This work utilizes derivatives of Open Source software. Below is acknowledgements along with a link to each OpenSource liscense.
+
 [SpinningUp](https://github.com/openai/spinningup/blob/master/LICENSE)
+
 [rSoccer](https://github.com/robocin/rSoccer/blob/main/LICENSE)
